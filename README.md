@@ -54,11 +54,6 @@ smartcity_dashboard/
 │   ├── MO_TA_LUONG_HOAT_DONG.md            # Mô tả luồng hoạt động hệ thống
 │   ├── HUONG_DAN_NAP_CODE_ESP32.md         # Hướng dẫn nạp code lên ESP32
 │   └── HUONG_DAN_CAI_THU_VIEN_VA_NAP_CODE.md
-│
-├── 📂 04_Docs/                               # Tài liệu & báo cáo đồ án
-│   └── Bao_Cao_Do_An_SmartCity.docx         # Báo cáo Word chuẩn Nghị định 30
-│
-├── tao_bao_cao.py                            # Script tạo báo cáo Word tự động
 └── README.md                                 # ← File này
 ```
 
