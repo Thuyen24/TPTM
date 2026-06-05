@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart City — Bảng Điều Khiển Trung Tâm</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+  <!-- Google Fonts: Space Mono (monospace tech) + Rajdhani (display) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Rajdhani', 'sans-serif'],
+            mono:    ['Space Mono', 'monospace'],
+            body:    ['Inter', 'sans-serif'],
+          },
+          colors: {
+            cyber: {
+              bg:      '#050c14',
+              panel:   '#0a1628',
+              border:  '#1a3a5c',
+              accent:  '#00d4ff',
+              green:   '#00ff9d',
+              yellow:  '#ffd700',
+              red:     '#ff3b5c',
+              orange:  '#ff7b00',
+              muted:   '#4a6fa5',
+            }
+          },
+          animation: {
+            'pulse-fast': 'pulse 0.7s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'scan':       'scan 3s linear infinite',
+            'flicker':    'flicker 1.5s steps(1) infinite',
+          },
+          keyframes: {
+            scan: {
+              '0%':   { backgroundPosition: '0% 0%' },
+              '100%': { backgroundPosition: '0% 100%' },
+            },
+            flicker: {
+              '0%, 19%, 21%, 23%, 25%, 54%, 56%, 100%': { opacity: 1 },
+              '20%, 24%, 55%': { opacity: 0.4 },
+            },
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --cyber-bg:     #050c14;
+      --cyber-panel:  #0a1628;
+      --cyber-border: #1a3a5c;
+      --cyber-accent: #00d4ff;
+      --cyber-green:  #00ff9d;
+      --cyber-red:    #ff3b5c;
+      --cyber-yellow: #ffd700;
+      --cyber-orange: #ff7b00;
+      --cyber-muted:  #4a6fa5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background: var(--cyber-bg);
+      color: #c8d8e8;
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,212,255,0.06), transparent),
+        linear-gradient(180deg, rgba(0,212,255,0.02) 0%, transparent 60%);
+    }
+
+    /* Scanline overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      z-index: 9999;
+    }
+
+    /* Panel card */
+    .panel {
+      background: var(--cyber-panel);
+      border: 1px solid var(--cyber-border);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyber-accent), transparent);
+      opacity: 0.6;
+    }
+
+    /* Glow text */
+    .glow-accent  { text-shadow: 0 0 12px rgba(0,212,255,0.8); color: var(--cyber-accent); }
+    .glow-green   { text-shadow: 0 0 12px rgba(0,255,157,0.8); color: var(--cyber-green); }
+    .glow-red     { text-shadow: 0 0 16px rgba(255,59,92,1);   color: var(--cyber-red); }
+    .glow-yellow  { text-shadow: 0 0 12px rgba(255,215,0,0.8); color: var(--cyber-yellow); }
+    .glow-orange  { text-shadow: 0 0 12px rgba(255,123,0,0.8); color: var(--cyber-orange); }
+
+    /* Number display */
+    .big-number {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    /* Corner bracket decoration */
+    .corner-tl::before, .corner-br::after {
+      content: '';
+      position: absolute;
+      width: 12px; height: 12px;
+    }
+    .corner-tl::before {
+      top: 6px; left: 6px;
+      border-top: 2px solid var(--cyber-accent);
+      border-left: 2px solid var(--cyber-accent);
+    }
+    .corner-br::after {
+      bottom: 6px; right: 6px;
+      border-bottom: 2px solid var(--cyber-accent);
+      border-right: 2px solid var(--cyber-accent);
+    }
+
+    /* Status dot */
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--cyber-green);
+      box-shadow: 0 0 8px var(--cyber-green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .status-dot.offline {
+      background: var(--cyber-red);
+      box-shadow: 0 0 8px var(--cyber-red);
+    }
+
+    /* Flood warning banner */
+    @keyframes flood-flash {
+      0%, 100% { background: rgba(255,59,92,0.15); border-color: var(--cyber-red); }
+      50%       { background: rgba(255,59,92,0.35); border-color: #ff8099; }
+    }
+    .flood-banner {
+      animation: flood-flash 0.8s ease-in-out infinite;
+      border: 2px solid var(--cyber-red);
+    }
+    @keyframes flood-text {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.5; }
+    }
+    .flood-text { animation: flood-text 0.8s ease-in-out infinite; }
+
+    /* Gas warning banner */
+    @keyframes gas-flash {
+      0%, 100% { background: rgba(255,123,0,0.15); border-color: var(--cyber-orange); }
+      50%       { background: rgba(255,123,0,0.35); border-color: #ffaa44; }
+    }
+    .gas-banner {
+      animation: gas-flash 0.8s ease-in-out infinite;
+      border: 2px solid var(--cyber-orange);
+    }
+
+    /* Progress bar */
+    .progress-bar {
+      height: 4px;
+      background: var(--cyber-border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    /* Relay button */
+    .btn-relay-on {
+      background: linear-gradient(135deg, rgba(0,255,157,0.15), rgba(0,212,255,0.1));
+      border: 1px solid var(--cyber-green);
+      color: var(--cyber-green);
+      transition: all 0.2s;
+    }
+    .btn-relay-on:hover {
+      background: linear-gradient(135deg, rgba(0,255,157,0.3), rgba(0,212,255,0.2));
+      box-shadow: 0 0 16px rgba(0,255,157,0.4);
+    }
+    .btn-relay-off {
+      background: linear-gradient(135deg, rgba(255,59,92,0.15), rgba(255,123,0,0.1));
+      border: 1px solid var(--cyber-red);
+      color: var(--cyber-red);
+      transition: all 0.2s;
+    }
+    .btn-relay-off:hover {
+      background: linear-gradient(135deg, rgba(255,59,92,0.3), rgba(255,123,0,0.2));
+      box-shadow: 0 0 16px rgba(255,59,92,0.4);
+    }
+    .btn-relay-on:active, .btn-relay-off:active { transform: scale(0.97); }
+
+    /* Chart container */
+    canvas { max-height: 220px; }
+
+    /* Divider */
+    .cyber-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyber-border), transparent);
+    }
+
+    /* Map grid */
+    .grid-sensor { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--cyber-bg); }
+    ::-webkit-scrollbar-thumb { background: var(--cyber-border); border-radius: 2px; }
+
+    /* Pulse animation for updating values */
+    @keyframes value-update {
+      0%   { opacity: 0.4; transform: scale(0.98); }
+      100% { opacity: 1;   transform: scale(1); }
+    }
+    .updating { animation: value-update 0.3s ease-out; }
+
+    /* Vehicle event feed */
+    @keyframes slide-in {
+      0%   { opacity: 0; transform: translateX(-12px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    .event-item {
+      animation: slide-in 0.35s ease-out;
+      border-left: 2px solid transparent;
+      padding: 5px 10px;
+      border-radius: 2px;
+      margin-bottom: 4px;
+      background: rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .event-in  { border-left-color: var(--cyber-green); }
+    .event-out { border-left-color: var(--cyber-red); }
+
+    /* Traffic stat box */
+    .stat-box {
+      background: rgba(0,0,0,0.25);
+      border: 1px solid var(--cyber-border);
+      border-radius: 4px;
+      padding: 14px 16px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-box::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      opacity: 0.5;
+    }
+    .stat-box.in-box::before  { background: var(--cyber-green); }
+    .stat-box.out-box::before { background: var(--cyber-red); }
+    .stat-box.cur-box::before { background: var(--cyber-accent); }
+
+    /* Vehicle feed scrollbar */
+    #vehicle-feed {
+      max-height: 230px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+    #vehicle-feed::-webkit-scrollbar { width: 3px; }
+    #vehicle-feed::-webkit-scrollbar-thumb { background: var(--cyber-border); }
+
+    /* Reset button */
+    .btn-reset {
+      background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,123,0,0.08));
+      border: 1px solid rgba(255,215,0,0.5);
+      color: var(--cyber-yellow);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      padding: 5px 12px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-reset:hover {
+      background: linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,123,0,0.2));
+      box-shadow: 0 0 12px rgba(255,215,0,0.3);
+    }
+    .btn-reset:active { transform: scale(0.96); }
+  </style>
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════
+       HEADER
+  ═══════════════════════════════════════════════════════ -->
+  <header class="border-b" style="border-color: var(--cyber-border); background: rgba(10,22,40,0.95); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 100;">
+    <div class="max-w-screen-2xl mx-auto px-6 py-3 flex items-center justify-between">
+
+      <!-- Logo + Title -->
+      <div class="flex items-center gap-4">
+        <div class="flex flex-col">
+          <span class="font-display font-700 text-2xl tracking-widest glow-accent" style="font-size:1.5rem;">
+            SMART CITY
+          </span>
+          <span class="font-mono text-xs" style="color: var(--cyber-muted); letter-spacing: 0.3em; font-size: 0.6rem;">
+            BẢNG ĐIỀU KHIỂN TRUNG TÂM
+          </span>
+        </div>
+      </div>
+
+      <!-- Status + Clock -->
+      <div class="flex items-center gap-6">
+        <!-- MQTT Status -->
+        <div class="flex items-center gap-2">
+          <div class="status-dot" id="mqtt-dot"></div>
+          <span class="font-mono text-xs" style="color: var(--cyber-muted);">MQTT</span>
+        </div>
+
+        <!-- System clock -->
+        <div class="font-mono text-sm glow-accent" id="clock">--:--:--</div>
+
+        <!-- Live badge -->
+        <div class="flex items-center gap-1.5 px-3 py-1 rounded-sm" style="background: rgba(0,255,157,0.08); border: 1px solid rgba(0,255,157,0.3);">
+          <div class="status-dot" style="width:6px; height:6px;"></div>
+          <span class="font-mono text-xs glow-green">LIVE</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main content -->
+  <main class="max-w-screen-2xl mx-auto px-6 py-6 space-y-6">
+
+    <!-- ═══════════════════════════════════════════════════
+         FLOOD WARNING BANNER (ẩn mặc định)
+    ═══════════════════════════════════════════════════ -->
+    <div id="flood-banner" class="flood-banner rounded-sm px-6 py-4 flex items-center justify-between" style="display:none !important;">
+      <div class="flex items-center gap-4">
+        <span class="text-3xl">⚠️</span>
+        <div>
+          <div class="font-display font-700 text-2xl glow-red flood-text tracking-widest">CẢNH BÁO NGẬP LỤT</div>
+          <div class="font-mono text-sm mt-1" style="color: #ff8099;">Mực nước vượt ngưỡng 70% · Khu vực cần hỗ trợ khẩn cấp</div>
+        </div>
+      </div>
+      <div class="font-mono text-xs glow-red flood-text text-right">
+        <div>MỨC ĐỘ: CAO</div>
+        <div id="flood-time" class="mt-1">--:--:--</div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         GAS WARNING BANNER (ẩn mặc định)
+    ═══════════════════════════════════════════════════ -->
+    <div id="gas-banner" class="gas-banner rounded-sm px-6 py-4 flex items-center justify-between" style="display:none;">
+      <div class="flex items-center gap-4">
+        <span class="text-3xl">🚨</span>
+        <div>
+          <div class="font-display font-700 text-2xl glow-orange flood-text tracking-widest">CẢNH BÁO NGUY HIỂM</div>
+          <div class="font-mono text-sm mt-1" style="color: #ffaa44;">PHÁT HIỆN RÒ RỈ KHÍ GAS / Ô NHIỄM NẶNG!</div>
+        </div>
+      </div>
+      <div class="font-mono text-xs glow-orange flood-text text-right">
+        <div>MỨC ĐỘ: NGUY HIỂM</div>
+        <div id="gas-time" class="mt-1">--:--:--</div>
+        <div id="gas-ppm" class="mt-1 font-700">-- ppm</div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         BÌNH THƯỜNG — Banner xanh (hiển thị khi bình thường)
+    ═══════════════════════════════════════════════════ -->
+    <div id="normal-banner" class="panel px-6 py-3 flex items-center gap-3">
+      <div class="status-dot"></div>
+      <span class="font-mono text-sm" style="color: var(--cyber-muted);">Hệ thống hoạt động bình thường — Không có cảnh báo</span>
+      <span class="ml-auto font-mono text-xs glow-green" id="last-update">Đang cập nhật...</span>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ROW 1: 4 METRIC CARDS
+    ═══════════════════════════════════════════════════ -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+      <!-- Card: Nhiệt độ -->
+      <div class="panel corner-tl corner-br p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-xs tracking-widest" style="color: var(--cyber-muted);">NHIỆT ĐỘ</span>
+          <span class="font-mono text-xs" style="color: var(--cyber-orange);">DHT22</span>
+        </div>
+        <div class="big-number glow-orange" id="val-nhiet-do">--.-</div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs" style="color: var(--cyber-muted);">°C</span>
+          <div class="progress-bar w-24">
+            <div class="progress-fill" id="bar-nhiet-do" style="width:0%; background: var(--cyber-orange);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card: Độ ẩm -->
+      <div class="panel corner-tl corner-br p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-xs tracking-widest" style="color: var(--cyber-muted);">ĐỘ ẨM</span>
+          <span class="font-mono text-xs" style="color: var(--cyber-accent);">DHT22</span>
+        </div>
+        <div class="big-number glow-accent" id="val-do-am">--.-</div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs" style="color: var(--cyber-muted);">%RH</span>
+          <div class="progress-bar w-24">
+            <div class="progress-fill" id="bar-do-am" style="width:0%; background: var(--cyber-accent);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card: Số xe (chia 2: IN / OUT) -->
+      <div class="panel corner-tl corner-br p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-xs tracking-widest" style="color: var(--cyber-muted);">PHÁT HIỆN XE</span>
+          <span class="font-mono text-xs" style="color: var(--cyber-green);">IR × 2</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div style="text-align:center;">
+            <div class="font-mono text-xs mb-1" style="color:var(--cyber-green);">▲ VÀO</div>
+            <div class="big-number glow-green" id="val-total-in" style="font-size:clamp(1.4rem,3vw,2.4rem);">---</div>
+          </div>
+          <div style="text-align:center;">
+            <div class="font-mono text-xs mb-1" style="color:var(--cyber-red);">▼ RA</div>
+            <div class="big-number glow-red" id="val-total-out" style="font-size:clamp(1.4rem,3vw,2.4rem);">---</div>
+          </div>
+        </div>
+        <div class="flex justify-between items-center text-xs" style="color: var(--cyber-muted);">
+          <span>Xe trong bãi:</span>
+          <strong class="glow-accent font-mono" id="val-so-xe">--</strong>
+        </div>
+      </div>
+
+      <!-- Card: Công suất điện -->
+      <div class="panel corner-tl corner-br p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-xs tracking-widest" style="color: var(--cyber-muted);">CÔNG SUẤT</span>
+          <span class="font-mono text-xs" style="color: var(--cyber-yellow);">ACS712</span>
+        </div>
+        <div class="big-number glow-yellow" id="val-cong-suat">---.-</div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs" style="color: var(--cyber-muted);">Watt</span>
+          <div class="progress-bar w-24">
+            <div class="progress-fill" id="bar-cong-suat" style="width:0%; background: var(--cyber-yellow);"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ROW 2: 2 CHARTS + SIDE PANEL
+    ═══════════════════════════════════════════════════ -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+      <!-- Chart 1: Chất lượng không khí -->
+      <div class="panel lg:col-span-1 p-5 flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="font-display font-600 text-base tracking-wide" style="color: var(--cyber-accent);">CHẤT LƯỢNG KHÔNG KHÍ</div>
+            <div class="font-mono text-xs mt-1" style="color: var(--cyber-muted);">Khí gas — MQ-135 · ADC raw</div>
+          </div>
+          <div class="text-right">
+            <div class="font-mono text-xl glow-accent" id="val-gas">----</div>
+            <div class="font-mono text-xs" style="color: var(--cyber-muted);">ppm</div>
+          </div>
+        </div>
+        <div class="cyber-divider"></div>
+        <canvas id="chartGas"></canvas>
+      </div>
+
+      <!-- Chart 2: Lưu lượng xe -->
+      <div class="panel lg:col-span-1 p-5 flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="font-display font-600 text-base tracking-wide glow-green">LƯU LƯỢNG XE</div>
+            <div class="font-mono text-xs mt-1" style="color: var(--cyber-muted);">Tổng xe đã hoàn tất (đã ra)</div>
+          </div>
+          <div class="text-right">
+            <div class="font-mono text-xl glow-green" id="val-xe-chart">--</div>
+            <div class="font-mono text-xs" style="color: var(--cyber-muted);">lượt</div>
+          </div>
+        </div>
+        <div class="cyber-divider"></div>
+        <canvas id="chartVehicle"></canvas>
+      </div>
+
+      <!-- Side Panel: Cảm biến phụ + Relay -->
+      <div class="panel lg:col-span-1 p-5 flex flex-col gap-5">
+        <div class="font-display font-600 text-base tracking-wide" style="color: var(--cyber-yellow);">CHỈ SỐ PHỤ</div>
+
+        <!-- Mực nước -->
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center">
+            <span class="font-mono text-xs" style="color: var(--cyber-muted);">MỰC NƯỚC</span>
+            <span class="font-mono text-sm glow-accent" id="val-muc-nuoc">--.-%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="bar-muc-nuoc" style="width:0%; background: linear-gradient(90deg, var(--cyber-green), var(--cyber-accent));"></div>
+          </div>
+          <div class="flex justify-between">
+            <span class="font-mono text-xs" style="color: var(--cyber-muted);">Ngưỡng cảnh báo: 70%</span>
+            <span class="font-mono text-xs" id="flood-label" style="color: var(--cyber-green);">AN TOÀN</span>
+          </div>
+        </div>
+
+        <div class="cyber-divider"></div>
+
+        <!-- Ánh sáng -->
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center">
+            <span class="font-mono text-xs" style="color: var(--cyber-muted);">ÁNH SÁNG</span>
+            <span class="font-mono text-sm glow-yellow" id="val-anh-sang">--%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="bar-anh-sang" style="width:0%; background: linear-gradient(90deg, var(--cyber-orange), var(--cyber-yellow));"></div>
+          </div>
+        </div>
+
+        <div class="cyber-divider"></div>
+
+        <!-- Điều khiển Relay -->
+        <div class="flex flex-col gap-3">
+          <div class="font-display font-600 text-base tracking-wide" style="color: var(--cyber-muted);">ĐIỀU KHIỂN RELAY</div>
+
+          <!-- Relay status -->
+          <div class="flex items-center gap-2 px-3 py-2 rounded-sm" style="background: rgba(0,0,0,0.3); border: 1px solid var(--cyber-border);">
+            <span class="font-mono text-xs" style="color: var(--cyber-muted);">TRẠNG THÁI:</span>
+            <span class="font-mono text-sm font-700" id="relay-status" style="color: var(--cyber-muted);">KHÔNG XÁC ĐỊNH</span>
+            <div class="ml-auto" id="relay-dot" style="width:8px; height:8px; border-radius:50%; background: var(--cyber-muted);"></div>
+          </div>
+
+          <!-- Buttons -->
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="sendRelay('ON')" class="btn-relay-on font-display font-600 text-base py-3 px-4 rounded-sm tracking-widest cursor-pointer">
+              ⚡ BẬT
+            </button>
+            <button onclick="sendRelay('OFF')" class="btn-relay-off font-display font-600 text-base py-3 px-4 rounded-sm tracking-widest cursor-pointer">
+              ⊘ TẮT
+            </button>
+          </div>
+
+          <!-- Relay feedback -->
+          <div id="relay-feedback" class="font-mono text-xs text-center py-1" style="color: var(--cyber-muted); min-height: 20px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ROW 3: GIÁM SÁT XE — CẢM BIẾN HỒNG NGOẠI
+    ═══════════════════════════════════════════════════ -->
+    <div class="panel p-5 flex flex-col gap-4">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span style="font-size:1.4rem;">🚗</span>
+          <div>
+            <div class="font-display font-700 text-base tracking-widest glow-green">GIÁM SÁT PHÁT HIỆN XE</div>
+            <div class="font-mono text-xs mt-0.5" style="color:var(--cyber-muted);">Cảm biến hồng ngoại IR · Real-time</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <!-- Reset button -->
+          <button id="btn-reset-vehicle" class="btn-reset" onclick="resetCounters()">
+            ↺ RESET
+          </button>
+          <div class="flex items-center gap-2">
+            <div class="status-dot" style="width:6px;height:6px;"></div>
+            <span class="font-mono text-xs" style="color:var(--cyber-muted);">ĐANG GIÁM SÁT</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cyber-divider"></div>
+
+      <!-- 3 cột: Feed | Stats | Chart -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        <!-- Cột 1: FEED SỰ KIỆN -->
+        <div class="flex flex-col gap-3">
+          <div class="font-mono text-xs tracking-widest" style="color:var(--cyber-muted);">LỊCH SỬ SỰ KIỆN</div>
+          <div id="vehicle-feed" class="flex flex-col">
+            <!-- Events injected by JS -->
+            <div class="font-mono text-xs text-center py-6" style="color:var(--cyber-muted);opacity:0.5;" id="feed-empty">
+              Chờ dữ liệu từ cảm biến...
+            </div>
+          </div>
+        </div>
+
+        <!-- Cột 2: THỐNG KÊ -->
+        <div class="flex flex-col gap-3">
+          <div class="font-mono text-xs tracking-widest" style="color:var(--cyber-muted);">THỐNG KÊ TỔNG HỢP</div>
+          <div class="flex flex-col gap-3">
+
+            <div class="stat-box in-box">
+              <div class="font-mono text-xs mb-2" style="color:var(--cyber-green);">▲ TỔNG LƯỢT VÀO</div>
+              <div class="font-family-mono text-3xl font-700 glow-green" id="stat-total-in"
+                   style="font-family:'Space Mono',monospace; font-size:2.2rem; line-height:1;">---</div>
+              <div class="font-mono text-xs mt-1" style="color:var(--cyber-muted);">lượt</div>
+            </div>
+
+            <div class="stat-box out-box">
+              <div class="font-mono text-xs mb-2" style="color:var(--cyber-red);">▼ TỔNG LƯỢT RA</div>
+              <div class="font-family-mono text-3xl font-700 glow-red" id="stat-total-out"
+                   style="font-family:'Space Mono',monospace; font-size:2.2rem; line-height:1;">---</div>
+              <div class="font-mono text-xs mt-1" style="color:var(--cyber-muted);">lượt</div>
+            </div>
+
+            <div class="stat-box cur-box">
+              <div class="font-mono text-xs mb-2" style="color:var(--cyber-accent);">◉ XE TRONG BÃI</div>
+              <div class="font-family-mono text-3xl font-700 glow-accent" id="stat-so-xe"
+                   style="font-family:'Space Mono',monospace; font-size:2.2rem; line-height:1;">--</div>
+              <div class="font-mono text-xs mt-1" style="color:var(--cyber-muted);">xe</div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Cột 3: BIỂU ĐỒ LƯU LƯỢNG -->
+        <div class="flex flex-col gap-3">
+          <div class="font-mono text-xs tracking-widest" style="color:var(--cyber-muted);">BIỂU ĐỒ LƯU LƯỢNG XE</div>
+          <div style="flex:1; min-height:240px; position:relative;">
+            <canvas id="chartTraffic" style="max-height:260px;"></canvas>
+          </div>
+          <div class="flex gap-4 justify-center">
+            <div class="flex items-center gap-1.5">
+              <div style="width:10px;height:10px;border-radius:2px;background:var(--cyber-green);"></div>
+              <span class="font-mono text-xs" style="color:var(--cyber-muted);">Xe vào</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div style="width:10px;height:10px;border-radius:2px;background:var(--cyber-red);"></div>
+              <span class="font-mono text-xs" style="color:var(--cyber-muted);">Xe ra</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         ROW 4: THỐNG KÊ HỆ THỐNG
+    ═══════════════════════════════════════════════════ -->
+    <div class="panel p-4">
+      <div class="flex flex-wrap items-center gap-6 justify-between">
+        <div class="font-display font-600 text-sm tracking-widest" style="color: var(--cyber-muted);">THÔNG TIN HỆ THỐNG</div>
+        <div class="flex flex-wrap gap-8">
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mono text-xs" style="color: var(--cyber-muted);">BROKER</span>
+            <span class="font-mono text-xs glow-accent">broker.hivemq.com:1883</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mono text-xs" style="color: var(--cyber-muted);">TOPIC PUBLISH</span>
+            <span class="font-mono text-xs glow-green">smartcity/sensors</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mono text-xs" style="color: var(--cyber-muted);">TOPIC SUBSCRIBE</span>
+            <span class="font-mono text-xs glow-yellow">smartcity/control</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mono text-xs" style="color: var(--cyber-muted);">CẬP NHẬT</span>
+            <span class="font-mono text-xs glow-accent">Mỗi 2 giây</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mono text-xs" style="color: var(--cyber-muted);">TỔNG BẢN GHI</span>
+            <span class="font-mono text-xs glow-accent" id="total-records">---</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mono text-xs" style="color: var(--cyber-muted);">RELAY (TRIGGER)</span>
+            <span class="font-mono text-xs glow-red">LOW LEVEL</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═════════════════════════════════════════════════════════
+       JAVASCRIPT
+  ═════════════════════════════════════════════════════════ -->
+  <script>
+  // ─── CONFIG ─────────────────────────────────────────────
+  const API_BASE      = 'http://localhost:8000';   // ← Sửa nếu backend chạy ở IP khác
+  const POLL_INTERVAL = 2000;  // ms
+  const MAX_POINTS    = 20;    // Số điểm tối đa trên biểu đồ
+  const MAX_FEED      = 50;    // Số sự kiện tối đa trong feed
+
+  // ─── STATE ──────────────────────────────────────────────
+  let relayState   = null;    // 'ON' | 'OFF' | null
+  let chartGas, chartVehicle, chartTraffic;
+  let labels       = [];
+  let gasData      = [];
+  let carData      = [];
+  let totalInData  = [];
+  let totalOutData = [];
+
+  // Trạng thái xe trước đó để phát hiện thay đổi
+  let prevTotalIn  = null;
+  let prevTotalOut = null;
+  let vehicleEvents = [];  // [{type:'in'|'out', time:String}]
+
+  // Bộ đếm độc lập (không phụ thuộc vào raw adjOut)
+  let xeInBai    = 0;   // Xe đang trong bãi
+  let xeLuuLuong = 0;   // Xe đã hoàn tất hành trình (vào và ra)
+
+  // Offset (lưu từ lúc nhấn RESET, bảo tồn qua localStorage)
+  let offsetIn  = parseInt(localStorage.getItem('sc_offsetIn')  || '0', 10);
+  let offsetOut = parseInt(localStorage.getItem('sc_offsetOut') || '0', 10);
+
+  // ─── RESET BỘ ĐẾM ──────────────────────────────────
+  function resetCounters() {
+    // Lưu giá trị hiện tại làm điểm gốc mới
+    if (prevTotalIn !== null) {
+      offsetIn  = prevTotalIn;
+      offsetOut = prevTotalOut;
+    }
+    localStorage.setItem('sc_offsetIn',  offsetIn);
+    localStorage.setItem('sc_offsetOut', offsetOut);
+
+    // Xóa feed và re-render
+    vehicleEvents = [];
+    xeInBai    = 0;
+    xeLuuLuong = 0;
+    renderVehicleFeed();
+
+    // Hiện thị feedback ngắn
+    const btn = document.getElementById('btn-reset-vehicle');
+    btn.textContent = '✓ ĐÃ RESET';
+    btn.style.color = 'var(--cyber-green)';
+    btn.style.borderColor = 'var(--cyber-green)';
+    setTimeout(() => {
+      btn.textContent = '↺ RESET';
+      btn.style.color = '';
+      btn.style.borderColor = '';
+    }, 2000);
+  }
+
+  // ─── ĐỒNG HỒ ────────────────────────────────────────────
+  function updateClock() {
+    const now  = new Date();
+    const hh   = String(now.getHours()).padStart(2,'0');
+    const mm   = String(now.getMinutes()).padStart(2,'0');
+    const ss   = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('clock').textContent = `${hh}:${mm}:${ss}`;
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ─── CHART.JS SETUP ─────────────────────────────────────
+  const chartDefaults = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { intersect: false, mode: 'index' },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(10,22,40,0.95)',
+        borderColor: '#1a3a5c',
+        borderWidth: 1,
+        titleFont: { family: 'Space Mono', size: 10 },
+        bodyFont:  { family: 'Space Mono', size: 11 },
+      }
+    },
+    scales: {
+      x: {
+        ticks: { color: '#4a6fa5', font: { family: 'Space Mono', size: 9 }, maxTicksLimit: 6 },
+        grid:  { color: 'rgba(26,58,92,0.4)' },
+      },
+      y: {
+        ticks: { color: '#4a6fa5', font: { family: 'Space Mono', size: 9 } },
+        grid:  { color: 'rgba(26,58,92,0.4)' },
+      }
+    },
+    animation: { duration: 300 },
+  };
+
+  function initCharts() {
+    const ctxGas = document.getElementById('chartGas').getContext('2d');
+    chartGas = new Chart(ctxGas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Khí gas (ADC)',
+          data: gasData,
+          borderColor: '#00d4ff',
+          backgroundColor: 'rgba(0,212,255,0.06)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: '#00d4ff',
+          fill: true,
+          tension: 0.4,
+        }]
+      },
+      options: {
+        ...chartDefaults,
+        scales: {
+          ...chartDefaults.scales,
+          y: { ...chartDefaults.scales.y, min: 0, max: 4096 }
+        }
+      }
+    });
+
+    const ctxVehicle = document.getElementById('chartVehicle').getContext('2d');
+    chartVehicle = new Chart(ctxVehicle, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Số xe',
+          data: carData,
+          borderColor: '#00ff9d',
+          backgroundColor: 'rgba(0,255,157,0.06)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: '#00ff9d',
+          fill: true,
+          tension: 0.3,
+          stepped: false,
+        }]
+      },
+      options: {
+        ...chartDefaults,
+        scales: {
+          ...chartDefaults.scales,
+          y: { ...chartDefaults.scales.y, min: 0, ticks: { ...chartDefaults.scales.y.ticks, stepSize: 1 } }
+        }
+      }
+    });
+
+    // ─── CHART: LƯU LƯỢNG XE VÀO / RA (Bar) ────────────────
+    const ctxTraffic = document.getElementById('chartTraffic').getContext('2d');
+    chartTraffic = new Chart(ctxTraffic, {
+      type: 'bar',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Xe vào',
+            data: [],
+            backgroundColor: 'rgba(0,255,157,0.55)',
+            borderColor: '#00ff9d',
+            borderWidth: 1,
+            borderRadius: 3,
+          },
+          {
+            label: 'Xe ra',
+            data: [],
+            backgroundColor: 'rgba(255,59,92,0.55)',
+            borderColor: '#ff3b5c',
+            borderWidth: 1,
+            borderRadius: 3,
+          }
+        ]
+      },
+      options: {
+        ...chartDefaults,
+        plugins: {
+          ...chartDefaults.plugins,
+          legend: { display: false },
+        },
+        scales: {
+          x: { ...chartDefaults.scales.x, stacked: false },
+          y: {
+            ...chartDefaults.scales.y,
+            min: 0,
+            ticks: { ...chartDefaults.scales.y.ticks, stepSize: 1 }
+          }
+        }
+      }
+    });
+  }
+
+  // ─── TIỆN ÍCH ───────────────────────────────────────────
+  function setVal(id, value, decimals = 1) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const newVal = decimals >= 0 ? Number(value).toFixed(decimals) : value;
+    if (el.textContent !== newVal) {
+      el.textContent = newVal;
+      el.classList.remove('updating');
+      void el.offsetWidth;  // Reflow
+      el.classList.add('updating');
+    }
+  }
+
+  function setBar(id, pct) {
+    const el = document.getElementById(id);
+    if (el) el.style.width = Math.min(100, Math.max(0, pct)) + '%';
+  }
+
+  function addChartPoint(time) {
+    // Lấy giờ trực tiếp từ trình duyệt — luôn đúng múi giờ máy tính
+    return time.toLocaleTimeString('vi-VN', { hour12: false });
+  }
+
+  // ─── CẬP NHẬT BIỂU ĐỒ TỪ HISTORY ───────────────────────
+  async function loadHistory() {
+    try {
+      const res  = await fetch(`${API_BASE}/api/data/history`);
+      const json = await res.json();
+      const data = json.data || [];
+
+      // Rebuild chart data
+      labels   = [];
+      gasData  = [];
+      carData  = [];
+      const trafficLabels  = [];
+      const trafficInData  = [];
+      const trafficOutData = [];
+
+      data.forEach((row, i) => {
+        const t = new Date();
+        const timeStr = t.toLocaleTimeString('vi-VN', { hour12: false });
+        labels.push(timeStr);
+        gasData.push(row.chat_luong_kk);
+        // Lưu lượng = xe hoàn tất cả 2 chiều: min(in, out) — loại trừ sai sót cảm biến
+        carData.push(Math.min(row.total_in || 0, row.total_out || 0));
+        // Traffic bar chart: dùng index làm label ngắn
+        trafficLabels.push('#' + (i + 1));
+        trafficInData.push(row.total_in  || 0);
+        trafficOutData.push(row.total_out || 0);
+      });
+
+      chartGas.data.labels           = labels;
+      chartGas.data.datasets[0].data = gasData;
+      chartGas.update('none');
+
+      chartVehicle.data.labels           = labels;
+      chartVehicle.data.datasets[0].data = carData;
+      chartVehicle.update('none');
+
+      // Traffic bar chart
+      chartTraffic.data.labels              = trafficLabels;
+      chartTraffic.data.datasets[0].data    = trafficInData;
+      chartTraffic.data.datasets[1].data    = trafficOutData;
+      chartTraffic.update('none');
+
+    } catch (e) {
+      console.warn('[History] Lỗi tải lịch sử:', e.message);
+    }
+  }
+
+  // ─── FEED SỰ KIỆN XE ────────────────────────────────────
+  function addVehicleEvent(type) {
+    const now  = new Date();
+    const time = now.toLocaleTimeString('vi-VN', { hour12: false });
+    vehicleEvents.unshift({ type, time });
+    if (vehicleEvents.length > MAX_FEED) vehicleEvents.pop();
+    renderVehicleFeed();
+  }
+
+  function renderVehicleFeed() {
+    const feed = document.getElementById('vehicle-feed');
+    const empty = document.getElementById('feed-empty');
+    if (vehicleEvents.length === 0) {
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    // Chỉ render lại khi cần (thêm item mới)
+    const existing = feed.querySelectorAll('.event-item').length;
+    if (existing === vehicleEvents.length) return;
+
+    // Render toàn bộ feed
+    const html = vehicleEvents.map((ev, i) => {
+      const isNew   = i === 0;
+      const cls     = ev.type === 'in' ? 'event-in' : 'event-out';
+      const icon    = ev.type === 'in' ? '🟢' : '🔴';
+      const label   = ev.type === 'in' ? 'XE VÀO' : 'XE RA';
+      const color   = ev.type === 'in' ? 'var(--cyber-green)' : 'var(--cyber-red)';
+      return `
+        <div class="event-item ${cls}" style="opacity:${isNew ? 1 : Math.max(0.35, 1 - i*0.04)};">
+          <span style="font-size:0.75rem;">${icon}</span>
+          <span class="font-mono text-xs font-700" style="color:${color}; min-width:56px;">${label}</span>
+          <span class="font-mono text-xs" style="color:var(--cyber-muted); margin-left:auto;">${ev.time}</span>
+        </div>`;
+    }).join('');
+
+    feed.innerHTML = (empty ? empty.outerHTML : '') + html;
+  }
+
+  // ─── CẬP NHẬT CARDS TỪ LATEST ───────────────────────────
+  async function loadLatest() {
+    try {
+      const res  = await fetch(`${API_BASE}/api/data/latest`);
+      const d    = await res.json();
+      const now  = new Date();
+
+      const curIn  = d.total_in  || 0;
+      const curOut = d.total_out || 0;
+
+      // Giá trị điều chỉnh theo offset (hiển thị trên card VÀO / RA)
+      const adjIn  = Math.max(0, curIn  - offsetIn);
+      const adjOut = Math.max(0, curOut - offsetOut);
+
+      // ─── PHÁT HIỆN SỰ KIỆN XE ──────────────────────────────
+      if (prevTotalIn !== null) {
+        const prevAdjIn  = Math.max(0, prevTotalIn  - offsetIn);
+        const prevAdjOut = Math.max(0, prevTotalOut - offsetOut);
+        const deltaIn    = adjIn  - prevAdjIn;
+        const deltaOut   = adjOut - prevAdjOut;
+
+        // Xe VÀO: mỗi xe vào → tăng xeInBai
+        for (let i = 0; i < deltaIn; i++) {
+          xeInBai++;
+          addVehicleEvent('in');
+        }
+
+        // Xe RA: chỉ giảm xeInBai nếu có xe thực sự trong bãi
+        // (loại bỏ xe ra ảo khi xeInBai = 0)
+        for (let i = 0; i < deltaOut; i++) {
+          if (xeInBai > 0) {
+            xeInBai--;
+            xeLuuLuong++;
+            addVehicleEvent('out');
+          }
+          // Nếu xeInBai = 0: bỏ qua, không tăng lưu lượng
+        }
+
+      } else {
+        // Lần đầu load — khởi tạo từ dữ liệu hiện có
+        xeInBai    = Math.max(0, adjIn - adjOut);
+        xeLuuLuong = Math.min(adjIn, adjOut);
+        if (adjIn > 0 || adjOut > 0) renderVehicleFeed();
+      }
+      prevTotalIn  = curIn;
+      prevTotalOut = curOut;
+
+      // ─── CẬP NHẬT STATS GIÁM SÁT XE ───────────────────────
+      setVal('stat-total-in',  adjIn,      0);
+      setVal('stat-total-out', xeLuuLuong, 0);   // Xe ra hợp lệ (hoàn tất)
+      setVal('stat-so-xe',     xeInBai,    0);
+
+      // Cards Row 1
+      setVal('val-nhiet-do',  d.nhiet_do,  1);
+      setVal('val-do-am',     d.do_am,     1);
+      setVal('val-total-in',  adjIn,       0);
+      setVal('val-total-out', xeLuuLuong,  0);   // Xe ra hợp lệ (hoàn tất)
+      setVal('val-so-xe',     xeInBai,     0);
+      setVal('val-cong-suat', d.cong_suat, 1);
+      setVal('val-gas',       d.chat_luong_kk, 0);
+      setVal('val-xe-chart',  xeLuuLuong,  0);   // Lưu lượng = xe hoàn tất
+      setVal('val-muc-nuoc',  d.muc_nuoc.toFixed(1) + '%', -1);
+      setVal('val-anh-sang',  d.anh_sang + '%', -1);
+
+      // Progress bars
+      setBar('bar-nhiet-do',  (d.nhiet_do  / 60)  * 100);
+      setBar('bar-do-am',     d.do_am);
+      setBar('bar-cong-suat', (d.cong_suat / 2000) * 100);
+      setBar('bar-muc-nuoc',  d.muc_nuoc);
+      setBar('bar-anh-sang',  d.anh_sang);
+
+      // Flood warning
+      const floodBanner  = document.getElementById('flood-banner');
+      const gasBanner    = document.getElementById('gas-banner');
+      const normalBanner = document.getElementById('normal-banner');
+      const floodLabel   = document.getElementById('flood-label');
+
+      const isFlood = d.ngap_lut;
+      const isGas   = d.chat_luong_kk >= 2000;
+
+      if (isFlood) {
+        floodBanner.style.display  = 'flex';
+        floodLabel.textContent = '⚠ NGUY HIỂM';
+        floodLabel.style.color = 'var(--cyber-red)';
+        document.getElementById('flood-time').textContent = addChartPoint(now);
+      } else {
+        floodBanner.style.display  = 'none';
+        floodLabel.textContent = '✓ AN TOÀN';
+        floodLabel.style.color = 'var(--cyber-green)';
+      }
+
+      if (isGas) {
+        gasBanner.style.display = 'flex';
+        document.getElementById('gas-time').textContent = addChartPoint(now);
+        document.getElementById('gas-ppm').textContent = d.chat_luong_kk + ' ppm';
+      } else {
+        gasBanner.style.display = 'none';
+      }
+
+      if (!isFlood && !isGas) {
+        normalBanner.style.display = 'flex';
+      } else {
+        normalBanner.style.display = 'none';
+      }
+
+      document.getElementById('last-update').textContent =
+        'Cập nhật: ' + addChartPoint(now);
+
+    } catch (e) {
+      console.warn('[Latest] Lỗi tải dữ liệu:', e.message);
+      document.getElementById('mqtt-dot').classList.add('offline');
+    }
+  }
+
+  // ─── KIỂM TRA TRẠNG THÁI HỆ THỐNG ──────────────────────
+  async function checkStatus() {
+    try {
+      const res  = await fetch(`${API_BASE}/api/status`);
+      const json = await res.json();
+      const dot  = document.getElementById('mqtt-dot');
+
+      if (json.mqtt_connected) {
+        dot.classList.remove('offline');
+      } else {
+        dot.classList.add('offline');
+      }
+
+      setVal('total-records', json.total_records, 0);
+    } catch (e) {
+      document.getElementById('mqtt-dot').classList.add('offline');
+    }
+  }
+
+  // ─── ĐIỀU KHIỂN RELAY ───────────────────────────────────
+  async function sendRelay(cmd) {
+    const feedback = document.getElementById('relay-feedback');
+    feedback.textContent = `Đang gửi lệnh ${cmd}...`;
+    feedback.style.color = 'var(--cyber-muted)';
+
+    try {
+      const res  = await fetch(`${API_BASE}/api/control`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ command: cmd }),
+      });
+      const json = await res.json();
+
+      if (json.success) {
+        relayState = cmd;
+        updateRelayUI(cmd);
+        feedback.textContent = `✓ Đã gửi lệnh ${cmd} thành công`;
+        feedback.style.color = 'var(--cyber-green)';
+      } else {
+        throw new Error(json.detail || 'Lỗi không xác định');
+      }
+    } catch (e) {
+      feedback.textContent = `✗ Lỗi: ${e.message}`;
+      feedback.style.color = 'var(--cyber-red)';
+    }
+
+    // Xóa feedback sau 4 giây
+    setTimeout(() => {
+      feedback.textContent = '';
+    }, 4000);
+  }
+
+  function updateRelayUI(state) {
+    const statusEl = document.getElementById('relay-status');
+    const dotEl    = document.getElementById('relay-dot');
+    if (state === 'ON') {
+      statusEl.textContent = 'ĐANG BẬT';
+      statusEl.style.color = 'var(--cyber-green)';
+      statusEl.style.textShadow = '0 0 8px var(--cyber-green)';
+      dotEl.style.background = 'var(--cyber-green)';
+      dotEl.style.boxShadow  = '0 0 8px var(--cyber-green)';
+    } else if (state === 'OFF') {
+      statusEl.textContent = 'ĐANG TẮT';
+      statusEl.style.color = 'var(--cyber-red)';
+      statusEl.style.textShadow = '0 0 8px var(--cyber-red)';
+      dotEl.style.background = 'var(--cyber-red)';
+      dotEl.style.boxShadow  = '0 0 8px var(--cyber-red)';
+    }
+  }
+
+  // ─── POLLING CHÍNH ───────────────────────────────────────
+  let historyCounter = 0;
+  async function poll() {
+    await loadLatest();
+
+    // Load history mỗi 5 lần (10 giây) để cập nhật chart
+    historyCounter++;
+    if (historyCounter % 5 === 0 || historyCounter === 1) {
+      await loadHistory();
+    }
+
+    // Status check mỗi 10 lần (20 giây)
+    if (historyCounter % 10 === 0) {
+      await checkStatus();
+    }
+  }
+
+  // ─── KHỞI ĐỘNG ───────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', async () => {
+    initCharts();
+    renderVehicleFeed();  // Hiển thị placeholder
+    await checkStatus();
+    await loadHistory();
+    await loadLatest();
+    setInterval(poll, POLL_INTERVAL);
+  });
+  </script>
+</body>
+</html>
